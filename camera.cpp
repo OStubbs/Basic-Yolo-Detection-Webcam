@@ -1,6 +1,7 @@
 #include <opencv2/opencv.hpp>
 #include <iostream>
 #include <thread>
+#include <atomic>
 
 std::vector<int> classIds;
 std::vector<float> confidences;
@@ -8,8 +9,8 @@ std::vector<cv::Rect> boxes;
 
 cv::Mat frame;
 
-void detection(cv::dnn::DetectionModel model) {
-    while (1) {
+void detection(cv::dnn::DetectionModel model, std::atomic<bool>& still_running) {
+    while (still_running) {
         // Essentially just constantly get the newest frame.
         cv::Mat copyFrame;
         frame.copyTo(copyFrame);
@@ -34,7 +35,9 @@ int main(int, char**) {
 
     cv::Mat last_frame;
     camera >> frame;
-    std::thread th1(detection, model);
+
+    std::atomic<bool> running { true } ;
+    std::thread th1(detection, model, std::ref(running));
     while (1) {
         camera >> frame;
         for (int i = 0; i < classIds.size(); ++i) {
@@ -48,8 +51,11 @@ int main(int, char**) {
         }
         cv::imshow("Detection", frame);
         
-        if (cv::waitKey(1) == 27)
+        if (cv::waitKey(1) == 27){
+            running = false;
+            th1.join();
             break;
+        }
     }
     return 0;
 }
